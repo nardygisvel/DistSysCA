@@ -1,0 +1,26 @@
+
+syntax = "proto3";
+package vibrationbeltguide;
+ 
+service VibrationBeltGuideService {
+  rpc RequestDestination (DestinationRequest) returns (DestinationAck);
+  rpc StreamNavigation   (DestinationRequest) returns (stream VibrationCommand);
+}
+ 
+message DestinationRequest {
+  string worker_id        = 1;
+  string destinationName = 2;
+}
+ 
+message DestinationAck {
+  bool   accepted           = 1;
+  string message            = 2;
+  float  estimatedDistance = 3;
+}
+ 
+message VibrationCommand {
+  string direction         = 1;
+  int32  intensity         = 2;
+  bool   obstacleDetected = 3;
+}
+

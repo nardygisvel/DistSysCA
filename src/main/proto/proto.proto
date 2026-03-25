@@ -1,0 +1,29 @@
+
+syntax = "proto3";
+package epilepsybracelet;
+ 
+service EpilepsyBraceletService {
+  rpc MonitorBiometrics (stream BiometricData) returns (stream SeizureResponse);
+  rpc EmergencyAlert    (EmergencyRequest)     returns (EmergencyAck);
+}
+ 
+message BiometricData {
+  string worker_id     = 1;
+  float  heart_rate    = 2;
+}
+ 
+message SeizureResponse {
+  bool   trigger_stimulation = 1;
+  string alert_level         = 2;
+}
+ 
+message EmergencyRequest {
+  string worker_id = 1;
+  string location  = 2;
+}
+ 
+message EmergencyAck {
+  bool   received     = 1;
+  string instructions = 2;
+}
+
