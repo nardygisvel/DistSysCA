@@ -1,0 +1,34 @@
+syntax = "proto3";
+package armmotorhelp;
+
+option java_multiple_files = true;
+option java_package = "generated.armmotorhelp";
+option java_outer_classname = "ArmMotorHelpProto";
+
+service ArmMotorHelpService {
+  // Client-side streaming
+  rpc StreamArmState (stream ArmState)      returns (ArmSessionSummary);
+  // Unary
+  rpc EmergencyStop  (EmergencyStopRequest) returns (EmergencyStopAck);
+}
+
+message ArmState {
+  string worker_id             = 1;
+  double motor_load_percentage = 2; // 0.0 - 100.0
+}
+
+message ArmSessionSummary {
+  string summary      = 1;
+  int32  total_events = 2;
+}
+
+message EmergencyStopRequest {
+  string worker_id = 1;
+  string location  = 2;
+}
+
+message EmergencyStopAck {
+  bool   motors_stopped = 1;
+  string message        = 2;
+}
+

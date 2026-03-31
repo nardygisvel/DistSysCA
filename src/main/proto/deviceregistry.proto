@@ -1,0 +1,25 @@
+
+syntax = "proto3";
+package deviceregistry;
+
+
+//the java options where added from the example of Hospital, in there we separate the files into a folder with generated code
+option java_multiple_files = true;
+option java_package = "generated.deviceregistry";
+option java_outer_classname = "DeviceRegistryProto";
+
+service DeviceRegistryService {
+  rpc ListDevices (ListDevicesRequest) returns (ListDevicesResponse);
+}
+
+message ListDevicesRequest {}
+
+message DeviceInfo {
+  string worker_id   = 1;
+  string device_type = 2; // "epilepsy_bracelet", "vibration_belt", "arm_motor"
+}
+
+message ListDevicesResponse {
+  repeated DeviceInfo devices = 1;
+}
+

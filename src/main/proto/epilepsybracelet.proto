@@ -1,0 +1,35 @@
+syntax = "proto3";
+package epilepsybracelet;
+
+option java_multiple_files = true;
+option java_package = "generated.epilepsybracelet";
+option java_outer_classname = "EpilepsyBraceletProto";
+
+
+service EpilepsyBraceletService {
+  // Bidirectional streaming
+  rpc StreamBiometricData (stream BiometricData) returns (stream SeizureAlert);
+  // Unary
+  rpc SendEmergencyAlert  (EmergencyAlertRequest) returns (EmergencyAlertAck);
+}
+
+message BiometricData {
+  string worker_id = 1;
+  double heart_rate_bpm = 2;
+}
+
+message SeizureAlert {
+  bool   trigger_stimulation = 1;
+  string alert_status        = 2; // "normal", "warning", "critical"
+}
+
+message EmergencyAlertRequest {
+  string worker_id = 1;
+  string location  = 2;
+}
+
+message EmergencyAlertAck {
+  bool   received = 1;
+  string message  = 2;
+}
+

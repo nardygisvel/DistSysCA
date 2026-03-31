@@ -1,0 +1,36 @@
+syntax = "proto3";
+package vibrationbeltguide;
+
+option java_multiple_files = true;
+option java_package = "generated.vibrationbeltguide";
+option java_outer_classname = "VibrationBeltGuideProto";
+
+service VibrationBeltGuideService {
+  // Unary
+  rpc RequestDestination (DestinationRequest) returns (DestinationAck);
+  // Server-side streaming
+  rpc StreamNavigation   (NavigationRequest)  returns (stream VibrationCommand);
+}
+
+message DestinationRequest {
+  string worker_id        = 1;
+  string destination_name = 2;
+}
+
+message DestinationAck {
+  bool   accepted        = 1;
+  string message         = 2;
+  double distance_meters = 3;
+}
+
+message NavigationRequest {
+  string worker_id        = 1;
+  string destination_name = 2;
+}
+
+message VibrationCommand {
+  string direction_instruction = 1; // "left", "right", "forward"
+  int32  intensity             = 2; // 0–100
+  bool   obstacle_detected     = 3;
+}
+
