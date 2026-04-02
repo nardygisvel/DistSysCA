@@ -1,35 +1,25 @@
 syntax = "proto3";
+
 package epilepsybracelet;
 
 option java_multiple_files = true;
-option java_package = "generated.epilepsybracelet";
-option java_outer_classname = "EpilepsyBraceletProto";
+option java_package = "generated.bracelet";
 
-
-service EpilepsyBraceletService {
-  // Bidirectional streaming
-  rpc StreamBiometricData (stream BiometricData) returns (stream SeizureAlert);
-  // Unary
-  rpc SendEmergencyAlert  (EmergencyAlertRequest) returns (EmergencyAlertAck);
+service BraceletService {
+  /* * BIDIRECTIONAL STREAMING
+   * Both client and server keep their "microphones" open.
+   * Client sends 'HeartData' constantly.
+   * Server sends 'HealthAlert' ONLY when it detects something wrong.
+   */
+  rpc MonitorHealth (stream HeartData) returns (stream HealthAlert);
 }
 
-message BiometricData {
-  string worker_id = 1;
-  double heart_rate_bpm = 2;
+message HeartData {
+  int32 bpm = 1; // Heart rate: Beats Per Minute
 }
 
-message SeizureAlert {
-  bool   trigger_stimulation = 1;
-  string alert_status        = 2; // "normal", "warning", "critical"
+message HealthAlert {
+  // GUI can use these strings to change colors: "NORMAL" (Green), "CRITICAL" (Red)
+  string alert_level = 1; 
+  string message = 2;      // Advice like "Please sit down" or "Help is coming"
 }
-
-message EmergencyAlertRequest {
-  string worker_id = 1;
-  string location  = 2;
-}
-
-message EmergencyAlertAck {
-  bool   received = 1;
-  string message  = 2;
-}
-

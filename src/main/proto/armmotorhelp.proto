@@ -1,34 +1,36 @@
 syntax = "proto3";
+
+// Package helps avoid naming conflicts in Java
 package armmotorhelp;
 
+// These options tell gRPC to generate separate Java files for each class
 option java_multiple_files = true;
-option java_package = "generated.armmotorhelp";
-option java_outer_classname = "ArmMotorHelpProto";
+option java_package = "generated.arm";
 
-service ArmMotorHelpService {
-  // Client-side streaming
-  rpc StreamArmState (stream ArmState)      returns (ArmSessionSummary);
-  // Unary
-  rpc EmergencyStop  (EmergencyStopRequest) returns (EmergencyStopAck);
+service ArmService {
+  /* * CLIENT-SIDE STREAMING
+   * The robotic arm sends many 'ArmData' updates (sensor readings).
+   * When the arm finishes, the server sends ONE 'ArmResponse' (summary).
+   */
+  rpc StreamArmState (stream ArmData) returns (ArmResponse);
+
+  /* * UNARY RPC
+   * A simple request-response. The user clicks a button in the GUI,
+   * the server stops the motors and confirms.
+   */
+  rpc EmergencyStop (ArmRequest) returns (ArmResponse);
 }
 
-message ArmState {
-  string worker_id             = 1;
-  double motor_load_percentage = 2; // 0.0 - 100.0
+message ArmData {
+  string sensor_id = 1; // ID of the specific joint or motor
+  int32 load = 2;       // Motor load (0 to 100)
 }
 
-message ArmSessionSummary {
-  string summary      = 1;
-  int32  total_events = 2;
+message ArmRequest {
+  string command = 1;   // For example: "STOP" or "RESET"
 }
 
-message EmergencyStopRequest {
-  string worker_id = 1;
-  string location  = 2;
+message ArmResponse {
+  string status_text = 1; // Text to show in the GUI (e.g., "All motors stopped")
+  bool is_active = 2;     // True if the arm is still running, False if stopped
 }
-
-message EmergencyStopAck {
-  bool   motors_stopped = 1;
-  string message        = 2;
-}
-

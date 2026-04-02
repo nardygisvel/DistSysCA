@@ -1,36 +1,24 @@
 syntax = "proto3";
+
 package vibrationbeltguide;
 
 option java_multiple_files = true;
-option java_package = "generated.vibrationbeltguide";
-option java_outer_classname = "VibrationBeltGuideProto";
+option java_package = "generated.belt";
 
-service VibrationBeltGuideService {
-  // Unary
-  rpc RequestDestination (DestinationRequest) returns (DestinationAck);
-  // Server-side streaming
-  rpc StreamNavigation   (NavigationRequest)  returns (stream VibrationCommand);
+service BeltService {
+  /* * SERVER-SIDE STREAMING
+   * Client sends one 'NavRequest' (the destination).
+   * Server stays open and sends many 'NavInstruction' messages 
+   * (like a GPS: "Turn left", "Go straight", etc.).
+   */
+  rpc GetNavigation (NavRequest) returns (stream NavInstruction);
 }
 
-message DestinationRequest {
-  string worker_id        = 1;
-  string destination_name = 2;
+message NavRequest {
+  string destination = 1; // Destination name like "Loading Dock B"
 }
 
-message DestinationAck {
-  bool   accepted        = 1;
-  string message         = 2;
-  double distance_meters = 3;
+message NavInstruction {
+  string direction = 1; // "LEFT", "RIGHT", "FORWARD", "ARRIVED"
+  int32 intensity = 2;  // How strong the belt should vibrate (1 to 5)
 }
-
-message NavigationRequest {
-  string worker_id        = 1;
-  string destination_name = 2;
-}
-
-message VibrationCommand {
-  string direction_instruction = 1; // "left", "right", "forward"
-  int32  intensity             = 2; // 0–100
-  bool   obstacle_detected     = 3;
-}
-
