@@ -1,0 +1,66 @@
+PROJECT DESCRIPTION: 
+
+your task is to develop an application that simulates the operations of a smart 
+automated environment that would support the achievement of one of the UNs SDG’s. 
+The environment will consist of smart services and devices that inter-communicate with 
+each other. You will design and implement a set of devices/services and messages for 
+your application. You should begin by devising your scenario. There must be a minimum 
+of 3 separate services that would simulate the operations of smart-automated 
+environment. Your devices/services must publish themselves and discover each other. 
+Your devices/services should communicate via gRPC. You must use Java to develop 
+your solution. Specify what operations are supported on each “service/device” in a 
+corresponding proto file. 
+To demonstrate your implementation develop a simple client GUI that will operate as a 
+main controller that discovers and uses your devices/services. 
+
+
+In this case the three protos are already created under the folder proto/
+
+the UN goal for this project is Decent Work and Econonic growth 
+ 
+
+Project Proposal  
+The proposal will describe the application that you will build. Identify your assigned UN 
+development goal, the overall purpose of the service, the functionalities within each 
+service and overall contribution of the services to the application. Your application will 
+use gRPC as the main communication mechanism. Explain in detail the service definition 
+and RPC (for each of the services) with examples of the request and response for each 
+functionality within the service. Explain the parameters in detail (their meaning and 
+datatype) 
+
+Report  
+A report which details the scenario and services you have used. Additionally, this 
+should specify the message formats for data exchange and service actuation. 
+The report must have all the headings of the marking scheme including 
+• Service Definitions 
+• Service Implementations 
+• Naming Services. 
+• Remote Error Handling & Advanced Features 
+• Client - Graphical User Interface (GUI) 
+• GitHub – link to Github repo 
+ 
+Your report should include a diagram that shows the components of your applicationa 
+and the relationship between the components. Your report should include screenshots 
+of inputs to  and outputs from your services that demonstrate the correct behaviour of 
+the services, the error handling  and  the advanced features.  
+Program Code  
+A zip file that contains all of your source code. 
+ The commit history must provide evidence of 
+regular meaningful contributions to the project using comments to document progress. 
+Include a link to the repository in your report. 
+
+Code: Service Definitions For each of the 3 different services/devices a corresponding proto file is defined and used. All 4 different types of RPC invocation styles must be used (simple RPC, server- side streaming RPC, client-side streaming RPC, bidirectional streaming RPC).  
+
+Code: Service Implementations: Implement 3 sufficiently complex service implementations. All 3 services should be written in Java. Additional service complexity and implementation. 
+
+Code: Use of Naming Services: Registration & Discovery Using a Naming Service.  
+
+Code: Remote Error Handling and Advanced gRPC: Appropriate error handling for remote invocations and error messaging. Cancelling of messages. Use of Metadata, Deadlines, Authentication etc. 
+
+Code: Graphical User Interface: A client for the 3 services that allows presentation and discovery of services/devices, control (passing parameters), invocation of the services/devices and viewing the output of the services. 
+
+Code repo  
+Github repo with a commit history that provides 
+evidence of regular meaningful contributions to 
+the project using comments to document 
+progress. 
