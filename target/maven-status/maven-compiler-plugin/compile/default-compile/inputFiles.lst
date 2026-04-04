@@ -1,9 +1,11 @@
 C:\Users\golub\Documents\NetBeansProjects\DistSysCA\src\main\java\generated\belt\NavRequestOrBuilder.java
 C:\Users\golub\Documents\NetBeansProjects\DistSysCA\src\main\java\generated\arm\ArmDataOrBuilder.java
 C:\Users\golub\Documents\NetBeansProjects\DistSysCA\src\main\java\generated\arm\Armmotorhelp.java
+C:\Users\golub\Documents\NetBeansProjects\DistSysCA\src\main\java\distsys\distsysca\AuthInterceptor.java
 C:\Users\golub\Documents\NetBeansProjects\DistSysCA\src\main\java\distsys\distsysca\ServiceRegistry.java
 C:\Users\golub\Documents\NetBeansProjects\DistSysCA\src\main\java\distsys\distsysca\BraceletServer.java
 C:\Users\golub\Documents\NetBeansProjects\DistSysCA\src\main\java\generated\arm\ArmServiceGrpc.java
+C:\Users\golub\Documents\NetBeansProjects\DistSysCA\src\main\java\distsys\distsysca\MainGUI.java
 C:\Users\golub\Documents\NetBeansProjects\DistSysCA\src\main\java\generated\bracelet\Epilepsybracelet.java
 C:\Users\golub\Documents\NetBeansProjects\DistSysCA\src\main\java\generated\arm\ArmResponse.java
 C:\Users\golub\Documents\NetBeansProjects\DistSysCA\src\main\java\generated\belt\BeltServiceGrpc.java
@@ -11,7 +13,6 @@ C:\Users\golub\Documents\NetBeansProjects\DistSysCA\src\main\java\generated\belt
 C:\Users\golub\Documents\NetBeansProjects\DistSysCA\src\main\java\generated\arm\ArmRequest.java
 C:\Users\golub\Documents\NetBeansProjects\DistSysCA\src\main\java\distsys\distsysca\ArmServer.java
 C:\Users\golub\Documents\NetBeansProjects\DistSysCA\src\main\java\generated\bracelet\HealthAlert.java
-C:\Users\golub\Documents\NetBeansProjects\DistSysCA\src\main\java\distsys\distsysca\MainClient.java
 C:\Users\golub\Documents\NetBeansProjects\DistSysCA\src\main\java\generated\bracelet\HeartDataOrBuilder.java
 C:\Users\golub\Documents\NetBeansProjects\DistSysCA\src\main\java\generated\belt\NavRequest.java
 C:\Users\golub\Documents\NetBeansProjects\DistSysCA\src\main\java\generated\belt\NavInstruction.java
@@ -19,7 +20,6 @@ C:\Users\golub\Documents\NetBeansProjects\DistSysCA\src\main\java\generated\arm\
 C:\Users\golub\Documents\NetBeansProjects\DistSysCA\src\main\java\generated\arm\ArmData.java
 C:\Users\golub\Documents\NetBeansProjects\DistSysCA\src\main\java\generated\bracelet\HealthAlertOrBuilder.java
 C:\Users\golub\Documents\NetBeansProjects\DistSysCA\src\main\java\generated\arm\ArmResponseOrBuilder.java
-C:\Users\golub\Documents\NetBeansProjects\DistSysCA\src\main\java\distsys\distsysca\DistSysCA.java
 C:\Users\golub\Documents\NetBeansProjects\DistSysCA\src\main\java\generated\bracelet\HeartData.java
 C:\Users\golub\Documents\NetBeansProjects\DistSysCA\src\main\java\distsys\distsysca\BeltServer.java
 C:\Users\golub\Documents\NetBeansProjects\DistSysCA\src\main\java\generated\bracelet\BraceletServiceGrpc.java

@@ -4,45 +4,81 @@
  */
 package distsys.distsysca;
 
+/**
+ *
+ * @author Nardy
+ */
 import generated.arm.*;
-import io.grpc.Server;
-import io.grpc.ServerBuilder;
+import io.grpc.*;
 import io.grpc.stub.StreamObserver;
 
 public class ArmServer {
     public static void main(String[] args) throws Exception {
-        Server server = ServerBuilder.forPort(50053)
-                .addService(new ArmServiceImpl())
-                .build().start();
+        int port = 50053;
+        Server server = ServerBuilder.forPort(port)
+                .addService(ServerInterceptors.intercept(
+                    new ArmServiceImpl(), new AuthInterceptor()))
+                .build()
+                .start();
+        ServiceRegistry.register("ArmService", port);
+        System.out.println("Arm Server started on port " + port);
 
-        ServiceRegistry.register("ArmMotor", "localhost:50053");
         server.awaitTermination();
     }
 
     static class ArmServiceImpl extends ArmServiceGrpc.ArmServiceImplBase {
-        // UNARY: Simple Request/Response
+
+        // UNARY RPC: one request in, one response out
+        // GUI sends a STOP command, server stops the exoskeleton and confirms
         @Override
         public void emergencyStop(ArmRequest req, StreamObserver<ArmResponse> responseObserver) {
+            System.out.println("Emergency stop received: " + req.getCommand());
+            if (req.getCommand() == null || req.getCommand().isEmpty()) {
+                responseObserver.onError(Status.INVALID_ARGUMENT
+                    .withDescription("Command cannot be empty")
+                    .asRuntimeException());
+                return;
+            }
             responseObserver.onNext(ArmResponse.newBuilder()
-                    .setStatusText("EMERGENCY STOP ACTIVE")
-                    .setIsActive(false).build());
+                    .setStatusText("EMERGENCY STOP - Device halted")
+                    .setIsActive(false)
+                    .build());
             responseObserver.onCompleted();
         }
 
-        // CLIENT STREAMING: Receiving multiple ArmData, returning ONE ArmResponse
+        // CLIENT-SIDE STREAMING: client sends multiple gesture commands,
+        // server collects them all and sends back ONE summary at the end
         @Override
         public StreamObserver<ArmData> streamArmState(StreamObserver<ArmResponse> responseObserver) {
             return new StreamObserver<ArmData>() {
-                int count = 0;
+                int total = 0;      // how many gestures were received
+                int successful = 0; // how many were executed successfully
+
                 @Override
-                public void onNext(ArmData value) { count++; }
+                public void onNext(ArmData data) {
+                    total++;
+                    // sensorId holds the gesture name
+                    // load holds the result: 1 = executed ok, 0 = failed
+                    boolean ok = data.getLoad() == 1;
+                    if (ok) successful++;
+                    System.out.println("Gesture received: " + data.getSensorId()
+                        + " -> " + (ok ? "executed" : "failed"));
+                }
+
                 @Override
-                public void onError(Throwable t) {}
+                public void onError(Throwable t) {
+                    System.err.println("Arm motor stream error: " + t.getMessage());
+                }
+
                 @Override
                 public void onCompleted() {
+                    // client finished sending all gestures
+                    // now send back ONE summary response
                     responseObserver.onNext(ArmResponse.newBuilder()
-                            .setStatusText("Processed " + count + " sensor readings")
-                            .setIsActive(true).build());
+                            .setStatusText(successful + "/" + total
+                                + " movements executed successfully")
+                            .setIsActive(true)
+                            .build());
                     responseObserver.onCompleted();
                 }
             };

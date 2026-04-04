@@ -4,263 +4,418 @@
  */
 package distsys.distsysca;
 
+/**
+ *
+ * @author Nardy
+ */
 import generated.belt.*;
 import generated.arm.*;
 import generated.bracelet.*;
 import io.grpc.*;
+import io.grpc.stub.MetadataUtils;
 import io.grpc.stub.StreamObserver;
 
+import javax.jmdns.ServiceInfo;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.util.concurrent.TimeUnit;
 
 /**
- * MainGUI - A simple JFrame that connects to 3 gRPC services:
- *   1. ArmService      - Emergency Stop button + status label
- *   2. BraceletService - Shows BPM and alert level with color
- *   3. BeltService     - Shows navigation instructions in a table
+ * MainGUI - Main controller window.
+ * Discovers 3 services using jmDNS and communicates with them using gRPC.
+ * GUI uses background threads so the interface never freezes.
  */
 public class MainGUI extends JFrame {
 
-    
-    // ??? gRPC Stubs (the "phones" we use to call the server) ???????????????????
+    // gRPC stubs
     private ArmServiceGrpc.ArmServiceBlockingStub armStub;
+    private ArmServiceGrpc.ArmServiceStub armAsyncStub;
     private BraceletServiceGrpc.BraceletServiceStub braceletStub;
     private BeltServiceGrpc.BeltServiceStub beltStub;
 
+    // gRPC channels
     private ManagedChannel armChannel, braceletChannel, beltChannel;
 
-    // ??? GUI Components ?????????????????????????????????????????????????????????
+    // GUI components
+    private DefaultTableModel discoveryTableModel;
 
-    // ARM panel
-    private JLabel  armStatusLabel;   // shows "All motors stopped", etc.
-    private JButton stopArmButton;    // sends EmergencyStop command
+    private JLabel armStatusLabel;
+    private JButton streamArmButton;
+    private JLabel armStreamLabel;
 
-    // BRACELET panel
-    private JLabel bpmLabel;          // shows current BPM number
-    private JLabel alertLabel;        // shows NORMAL or CRITICAL (changes color)
-    private JLabel braceletMsgLabel;  // shows advice message from server
+    private JLabel bpmLabel;
+    private JLabel alertLabel;
+    private JLabel braceletMsgLabel;
+    private JSlider bpmSlider;
+    private StreamObserver<HeartData> braceletSender;
 
-    // BELT panel
-    private DefaultTableModel tableModel; // holds rows of navigation data
-    private JTextField destinationField;  // user types destination here
-    private JButton navigateButton;       // starts navigation streaming
+    private DefaultTableModel navTableModel;
+    private JTextField destinationField;
+
+    private static final String[] GESTURES = {"GRIP", "RELEASE", "FLEX", "EXTEND", "PINCH"};
+
+    // Metadata keys
+    private static final Metadata.Key<String> TOKEN_KEY =
+            Metadata.Key.of("token", Metadata.ASCII_STRING_MARSHALLER);
+    private static final Metadata.Key<String> CLIENT_ID_KEY =
+            Metadata.Key.of("client-id", Metadata.ASCII_STRING_MARSHALLER);
 
 
-    // ??? Constructor: build the window ??????????????????????????????????????????
     public MainGUI() {
-        setTitle("Assistive Device Monitor");
-        setSize(700, 600);
+        setTitle("Distributed System CA - Nardy Apala");
+        setSize(750, 700);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setLayout(new BorderLayout(10, 10)); // gaps between sections
+        setLayout(new BorderLayout(10, 10));
 
-        // Connect to gRPC servers (uses same ServiceRegistry as MainClient)
-        connectToServers();
+        // Shutdown channels when closing the window
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                shutdownChannels();
+            }
+        });
 
-        // Build each panel and add to the window
-        add(buildArmPanel(),       BorderLayout.NORTH);
-        add(buildBraceletPanel(),  BorderLayout.CENTER);
-        add(buildBeltPanel(),      BorderLayout.SOUTH);
+        // Build GUI panels
+        JPanel mainPanel = new JPanel();
+        mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
+        mainPanel.add(buildDiscoveryPanel());
+        mainPanel.add(buildArmPanel());
+        mainPanel.add(buildBraceletPanel());
+        mainPanel.add(buildBeltPanel());
 
+        add(new JScrollPane(mainPanel), BorderLayout.CENTER);
         setVisible(true);
+
+        // Start service discovery
+        discoverServices();
     }
 
-
-    // ??? Connect to all 3 gRPC servers ??????????????????????????????????????????
-    private void connectToServers() {
-        String armAddr      = ServiceRegistry.lookup("ArmMotor");
-        String braceletAddr = ServiceRegistry.lookup("EpilepsyBracelet");
-        String beltAddr     = ServiceRegistry.lookup("VibrationBelt");
-
-        armChannel      = ManagedChannelBuilder.forTarget(armAddr).usePlaintext().build();
-        braceletChannel = ManagedChannelBuilder.forTarget(braceletAddr).usePlaintext().build();
-        beltChannel     = ManagedChannelBuilder.forTarget(beltAddr).usePlaintext().build();
-
-        armStub      = ArmServiceGrpc.newBlockingStub(armChannel);
-        braceletStub = BraceletServiceGrpc.newStub(braceletChannel);
-        beltStub     = BeltServiceGrpc.newStub(beltChannel);
+    /** Build metadata for authentication */
+    private Metadata buildMetadata() {
+        Metadata metadata = new Metadata();
+        metadata.put(TOKEN_KEY, "valid-token");
+        metadata.put(CLIENT_ID_KEY, "main-gui-001");
+        return metadata;
     }
 
+    /** Discover services using jmDNS */
+    private void discoverServices() {
+        new Thread(() -> {
+            String[] serviceNames = {"BeltService", "BraceletService", "ArmService"};
 
-    // ???????????????????????????????????????????????????????????????????????????
-    // PANEL 1 - ROBOTIC ARM
-    // Shows a button to send EmergencyStop, and displays the server's response
-    // ???????????????????????????????????????????????????????????????????????????
+            for (String name : serviceNames) {
+                ServiceInfo info = ServiceRegistry.discover(name);
+
+                if (info != null) {
+                    String host = info.getHostAddresses()[0];
+                    int port = info.getPort();
+                    String address = host + ":" + port;
+
+                    SwingUtilities.invokeLater(() ->
+                            discoveryTableModel.addRow(new Object[]{name, address, "Connected"}));
+
+                    connectToService(name, host, port);
+                } else {
+                    SwingUtilities.invokeLater(() ->
+                            discoveryTableModel.addRow(new Object[]{name, "---", "Not Found"}));
+                }
+            }
+
+            // Start bracelet stream if available
+            if (braceletStub != null) {
+                startBraceletMonitor();
+            }
+
+        }).start();
+    }
+
+    /** Connect to a discovered service */
+    private void connectToService(String name, String host, int port) {
+        ManagedChannel channel = ManagedChannelBuilder
+                .forAddress(host, port)
+                .usePlaintext()
+                .build();
+
+        Metadata metadata = buildMetadata();
+
+        switch (name) {
+            case "BeltService":
+                beltChannel = channel;
+                beltStub = MetadataUtils.attachHeaders(
+                        BeltServiceGrpc.newStub(channel), metadata);
+                break;
+
+            case "ArmService":
+                armChannel = channel;
+                armStub = MetadataUtils.attachHeaders(
+                        ArmServiceGrpc.newBlockingStub(channel), metadata);
+                armAsyncStub = MetadataUtils.attachHeaders(
+                        ArmServiceGrpc.newStub(channel), metadata);
+                break;
+
+            case "BraceletService":
+                braceletChannel = channel;
+                braceletStub = MetadataUtils.attachHeaders(
+                        BraceletServiceGrpc.newStub(channel), metadata);
+                break;
+        }
+    }
+
+    /*Panel Service Discovery */
+    private JPanel buildDiscoveryPanel() {
+        JPanel panel = new JPanel(new BorderLayout(5, 5));
+        panel.setBorder(BorderFactory.createTitledBorder("Service Discovery (jmDNS)"));
+
+        discoveryTableModel = new DefaultTableModel(
+                new String[]{"Service", "Address", "Status"}, 0);
+
+        JTable table = new JTable(discoveryTableModel);
+        table.setRowHeight(22);
+
+        panel.add(new JScrollPane(table), BorderLayout.CENTER);
+        panel.setPreferredSize(new Dimension(700, 120));
+        return panel;
+    }
+
+    /* Panel 1 - Robotic Arm */
     private JPanel buildArmPanel() {
-        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 10));
-        panel.setBorder(BorderFactory.createTitledBorder("?? Robotic Arm"));
-        panel.setBackground(new Color(245, 245, 245));
+        JPanel panel = new JPanel(new GridLayout(2, 1, 5, 5));
+        panel.setBorder(BorderFactory.createTitledBorder("Robotic Arm"));
 
-        stopArmButton = new JButton("EMERGENCY STOP");
+        // Emergency Stop
+        JPanel topRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 5));
+        JButton stopArmButton = new JButton("EMERGENCY STOP");
         stopArmButton.setBackground(Color.RED);
         stopArmButton.setForeground(Color.WHITE);
-        stopArmButton.setFont(new Font("Arial", Font.BOLD, 14));
-
         armStatusLabel = new JLabel("Status: waiting...");
-        armStatusLabel.setFont(new Font("Arial", Font.PLAIN, 14));
-
-        // When button is clicked ? call gRPC EmergencyStop
         stopArmButton.addActionListener(e -> sendEmergencyStop());
+        topRow.add(stopArmButton);
+        topRow.add(armStatusLabel);
 
-        panel.add(stopArmButton);
-        panel.add(armStatusLabel);
+        // Client-side streaming
+        JPanel bottomRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 5));
+        streamArmButton = new JButton("Stream Sensor Data");
+        streamArmButton.setBackground(new Color(0, 120, 215));
+        streamArmButton.setForeground(Color.WHITE);
+        armStreamLabel = new JLabel("Stream: not started");
+        streamArmButton.addActionListener(e -> sendArmStream());
+        bottomRow.add(streamArmButton);
+        bottomRow.add(armStreamLabel);
+
+        panel.add(topRow);
+        panel.add(bottomRow);
         return panel;
     }
 
-    // Sends STOP command to the arm server (Unary RPC)
+    /* Unary RPC: Emergency Stop */
     private void sendEmergencyStop() {
-        // Run in background thread so the GUI doesn't freeze
+        if (armStub == null) {
+            armStatusLabel.setText("Status: Arm service not connected");
+            return;
+        }
+
         new Thread(() -> {
-            ArmResponse response = armStub.emergencyStop(
-                ArmRequest.newBuilder().setCommand("STOP").build()
-            );
-            // Update the label on the Swing thread (always do GUI updates here)
-            SwingUtilities.invokeLater(() -> {
-                armStatusLabel.setText("Status: " + response.getStatusText());
-                armStatusLabel.setForeground(response.getIsActive() ? Color.ORANGE : Color.GREEN.darker());
-            });
+            try {
+                ArmResponse response = armStub
+                        .withDeadlineAfter(5, TimeUnit.SECONDS)
+                        .emergencyStop(ArmRequest.newBuilder().setCommand("STOP").build());
+
+                SwingUtilities.invokeLater(() -> {
+                    armStatusLabel.setText("Status: " + response.getStatusText());
+                });
+
+            } catch (StatusRuntimeException e) {
+                SwingUtilities.invokeLater(() ->
+                        armStatusLabel.setText("Error: " + e.getStatus().getDescription()));
+            }
         }).start();
     }
 
+    /* Client-side streaming: send multiple gestures */
+    private void sendArmStream() {
+        if (armAsyncStub == null) {
+            armStreamLabel.setText("Stream: Arm service not connected");
+            return;
+        }
 
-    // ???????????????????????????????????????????????????????????????????????????
-    // PANEL 2 - EPILEPSY BRACELET
-    // Shows live BPM and alert level. Turns red if CRITICAL.
-    // ???????????????????????????????????????????????????????????????????????????
+        new Thread(() -> {
+            StreamObserver<ArmData> sender = armAsyncStub.streamArmState(
+                    new StreamObserver<ArmResponse>() {
+                        @Override
+                        public void onNext(ArmResponse response) {
+                            SwingUtilities.invokeLater(() -> {
+                                armStreamLabel.setText("Stream: " + response.getStatusText());
+                            });
+                        }
+
+                        @Override
+                        public void onError(Throwable t) {
+                            SwingUtilities.invokeLater(() ->
+                                    armStreamLabel.setText("Stream Error: " + t.getMessage()));
+                        }
+
+                        @Override
+                        public void onCompleted() {}
+                    }
+            );
+
+            for (String gesture : GESTURES) {
+                sender.onNext(ArmData.newBuilder()
+                        .setSensorId(gesture)
+                        .setLoad(1)
+                        .build());
+
+                SwingUtilities.invokeLater(() ->
+                        armStreamLabel.setText("Sending: " + gesture));
+
+                try { Thread.sleep(500); } catch (InterruptedException ignored) {}
+            }
+
+            sender.onCompleted();
+        }).start();
+    }
+
+    /* Panel 2 - Bracelet (Bidirectional Streaming) */
     private JPanel buildBraceletPanel() {
-        JPanel panel = new JPanel(new GridLayout(3, 1, 5, 5));
-        panel.setBorder(BorderFactory.createTitledBorder("?? Epilepsy Bracelet Monitor"));
-        panel.setBackground(new Color(245, 245, 245));
+        JPanel panel = new JPanel(new BorderLayout(5, 5));
+        panel.setBorder(BorderFactory.createTitledBorder("Epilepsy Bracelet"));
 
-        bpmLabel        = new JLabel("BPM: --",       SwingConstants.CENTER);
-        alertLabel      = new JLabel("Alert: --",     SwingConstants.CENTER);
-        braceletMsgLabel= new JLabel("Message: --",   SwingConstants.CENTER);
+        JPanel labels = new JPanel(new GridLayout(3, 1, 5, 5));
+        bpmLabel = new JLabel("BPM: --", SwingConstants.CENTER);
+        alertLabel = new JLabel("Alert: --", SwingConstants.CENTER);
+        braceletMsgLabel = new JLabel("Message: --", SwingConstants.CENTER);
 
-        bpmLabel.setFont(new Font("Arial", Font.BOLD, 22));
-        alertLabel.setFont(new Font("Arial", Font.BOLD, 18));
-        braceletMsgLabel.setFont(new Font("Arial", Font.PLAIN, 14));
+        labels.add(bpmLabel);
+        labels.add(alertLabel);
+        labels.add(braceletMsgLabel);
 
-        panel.add(bpmLabel);
-        panel.add(alertLabel);
-        panel.add(braceletMsgLabel);
+        JPanel sliderPanel = new JPanel(new FlowLayout());
+        sliderPanel.add(new JLabel("Simulate BPM:"));
+        bpmSlider = new JSlider(40, 180, 75);
+        bpmSlider.setMajorTickSpacing(20);
+        bpmSlider.setPaintTicks(true);
+        bpmSlider.setPaintLabels(true);
 
-        // Start listening to the bracelet right away (Bidirectional streaming)
-        startBraceletMonitor();
+        bpmSlider.addChangeListener(e -> {
+            if (!bpmSlider.getValueIsAdjusting() && braceletSender != null) {
+                int bpm = bpmSlider.getValue();
+                braceletSender.onNext(HeartData.newBuilder().setBpm(bpm).build());
+                bpmLabel.setText("BPM: " + bpm);
+            }
+        });
 
+        sliderPanel.add(bpmSlider);
+
+        panel.add(labels, BorderLayout.CENTER);
+        panel.add(sliderPanel, BorderLayout.SOUTH);
         return panel;
     }
 
-    // Opens a bidirectional stream with the bracelet server
+    /* Start bidirectional stream with bracelet server */
     private void startBraceletMonitor() {
         new Thread(() -> {
-            // This observer receives alerts FROM the server
-            StreamObserver<HeartData> sender = braceletStub.monitorHealth(
-                new StreamObserver<HealthAlert>() {
-                    @Override
-                    public void onNext(HealthAlert alert) {
-                        // Update bracelet labels on the Swing thread
-                        SwingUtilities.invokeLater(() -> {
-                            alertLabel.setText("Alert: " + alert.getAlertLevel());
-                            braceletMsgLabel.setText("Message: " + alert.getMessage());
+            braceletSender = braceletStub.monitorHealth(
+                    new StreamObserver<HealthAlert>() {
+                        @Override
+                        public void onNext(HealthAlert alert) {
+                            SwingUtilities.invokeLater(() -> {
+                                alertLabel.setText("Alert: " + alert.getAlertLevel());
+                                braceletMsgLabel.setText("Message: " + alert.getMessage());
+                            });
+                        }
 
-                            // Change color: GREEN = normal, RED = critical
-                            if (alert.getAlertLevel().equals("CRITICAL")) {
-                                alertLabel.setForeground(Color.RED);
-                            } else {
-                                alertLabel.setForeground(Color.GREEN.darker());
-                            }
-                        });
+                        @Override
+                        public void onError(Throwable t) {
+                            SwingUtilities.invokeLater(() ->
+                                    alertLabel.setText("Bracelet Error: " + t.getMessage()));
+                        }
+
+                        @Override
+                        public void onCompleted() {
+                            SwingUtilities.invokeLater(() ->
+                                    braceletMsgLabel.setText("Stream ended"));
+                        }
                     }
-                    @Override public void onError(Throwable t) {
-                        SwingUtilities.invokeLater(() -> alertLabel.setText("Bracelet Error"));
-                    }
-                    @Override public void onCompleted() {}
-                }
             );
-
-            // Send a sample BPM reading to the server
-            // In a real app, you'd loop this with real sensor data
-            sender.onNext(HeartData.newBuilder().setBpm(120).build());
-
-            SwingUtilities.invokeLater(() -> bpmLabel.setText("BPM: 120"));
-
         }).start();
     }
 
-
-    // ???????????????????????????????????????????????????????????????????????????
-    // PANEL 3 - VIBRATION BELT NAVIGATION
-    // User types a destination, clicks Navigate, and instructions appear in table
-    // ???????????????????????????????????????????????????????????????????????????
+    /* Panel 3 - Belt Navigation (Server-side streaming) */
     private JPanel buildBeltPanel() {
         JPanel panel = new JPanel(new BorderLayout(5, 5));
-        panel.setBorder(BorderFactory.createTitledBorder("?? Belt Navigation"));
-        panel.setBackground(new Color(245, 245, 245));
+        panel.setBorder(BorderFactory.createTitledBorder("Belt Navigation"));
 
-        // Top row: text field + button
         JPanel topRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
         destinationField = new JTextField("Exit", 20);
-        navigateButton   = new JButton("Navigate");
+        JButton navigateButton = new JButton("Navigate");
         navigateButton.setBackground(new Color(0, 120, 215));
         navigateButton.setForeground(Color.WHITE);
-
         navigateButton.addActionListener(e -> startNavigation());
 
         topRow.add(new JLabel("Destination:"));
         topRow.add(destinationField);
         topRow.add(navigateButton);
 
-        // Table to show Direction + Intensity columns
-        tableModel = new DefaultTableModel(new String[]{"Direction", "Intensity"}, 0);
-        JTable table = new JTable(tableModel);
-        table.setFont(new Font("Arial", Font.PLAIN, 13));
+        navTableModel = new DefaultTableModel(new String[]{"Direction", "Intensity"}, 0);
+        JTable table = new JTable(navTableModel);
         table.setRowHeight(25);
 
         panel.add(topRow, BorderLayout.NORTH);
         panel.add(new JScrollPane(table), BorderLayout.CENTER);
-
         return panel;
     }
 
-    // Calls GetNavigation and adds each instruction as a new table row
+    /* Server-side streaming: receive navigation instructions */
     private void startNavigation() {
-        tableModel.setRowCount(0); // clear old rows
+        if (beltStub == null) {
+            navTableModel.addRow(new Object[]{"Belt service not connected", "-"});
+            return;
+        }
+
+        navTableModel.setRowCount(0);
         String destination = destinationField.getText();
 
         new Thread(() -> {
             beltStub.getNavigation(
-                NavRequest.newBuilder().setDestination(destination).build(),
-                new StreamObserver<NavInstruction>() {
-                    @Override
-                    public void onNext(NavInstruction instruction) {
-                        // Each instruction = one new row in the table
-                        SwingUtilities.invokeLater(() ->
-                            tableModel.addRow(new Object[]{
-                                instruction.getDirection(),
-                                instruction.getIntensity()
-                            })
-                        );
+                    NavRequest.newBuilder().setDestination(destination).build(),
+                    new StreamObserver<NavInstruction>() {
+                        @Override
+                        public void onNext(NavInstruction instruction) {
+                            SwingUtilities.invokeLater(() ->
+                                    navTableModel.addRow(new Object[]{
+                                            instruction.getDirection(),
+                                            instruction.getIntensity()
+                                    }));
+                        }
+
+                        @Override
+                        public void onError(Throwable t) {
+                            SwingUtilities.invokeLater(() ->
+                                    navTableModel.addRow(new Object[]{"ERROR: " + t.getMessage(), "-"}));
+                        }
+
+                        @Override
+                        public void onCompleted() {
+                            SwingUtilities.invokeLater(() ->
+                                    navTableModel.addRow(new Object[]{"ARRIVED", "-"}));
+                        }
                     }
-                    @Override public void onError(Throwable t) {
-                        SwingUtilities.invokeLater(() ->
-                            tableModel.addRow(new Object[]{"ERROR", "-"})
-                        );
-                    }
-                    @Override public void onCompleted() {
-                        SwingUtilities.invokeLater(() ->
-                            tableModel.addRow(new Object[]{"? ARRIVED", "-"})
-                        );
-                    }
-                }
             );
         }).start();
     }
 
+    /* Shutdown all gRPC channels */
+    private void shutdownChannels() {
+        if (braceletSender != null) braceletSender.onCompleted();
+        if (armChannel != null) armChannel.shutdown();
+        if (braceletChannel != null) braceletChannel.shutdown();
+        if (beltChannel != null) beltChannel.shutdown();
+    }
 
-    // ??? Main: launch the GUI ????????????????????????????????????????????????????
     public static void main(String[] args) {
-        // Always start Swing apps on the Event Dispatch Thread
-        SwingUtilities.invokeLater(() -> new MainGUI());
+        SwingUtilities.invokeLater(MainGUI::new);
     }
 }
-
